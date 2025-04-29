@@ -174,10 +174,10 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
 
     loop {
         let mut buf = [0u8; 1];
-        stream.peek(&mut buf).await.unwrap();
-        if buf == [0u8] {
+        let count = stream.peek(&mut buf).await.unwrap();
+        if count == 0 {
             continue;
-        };
+        }
 
         let packet_length = if state.read().await.encryption_enabled {
             read_encrypted_var_int_from_stream(
