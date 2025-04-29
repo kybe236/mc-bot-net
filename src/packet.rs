@@ -8,7 +8,7 @@ use tokio::{
 
 use crate::{
     client::SharedState,
-    helper::varint::{read_var_int, read_var_int_from_stream},
+    utils::data_types::varint::{read_var_int, read_var_int_from_stream},
 };
 
 #[derive(Debug, Default)]

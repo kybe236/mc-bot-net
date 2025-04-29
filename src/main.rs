@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 mod client;
 mod config;
-mod helper;
 mod packet;
+mod packets;
+mod utils;
 
 #[tokio::main]
 async fn main() {

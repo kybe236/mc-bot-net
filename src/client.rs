@@ -1,4 +1,4 @@
-use rand::{Rng, distr::Alphanumeric};
+use rand::{Rng, distributions::Alphanumeric};
 use std::{sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::RwLock, time::sleep};
 use tokio_socks::tcp::Socks5Stream;
@@ -17,12 +17,12 @@ async fn connect_with_tor(
 
     // Decide whether to reuse or generate new credentials
     if randomize && (*retries == 0 || *retries >= reuse_limit) {
-        *last_username = rand::rng()
+        *last_username = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(8)
             .map(char::from)
             .collect();
-        *last_password = rand::rng()
+        *last_password = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(8)
             .map(char::from)
