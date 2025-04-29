@@ -8,6 +8,7 @@ use tokio::{
     time::sleep,
 };
 use tokio_socks::tcp::Socks5Stream;
+use tracing::{debug, error, info, warn};
 
 use crate::{
     config::Config,
@@ -62,7 +63,7 @@ async fn connect_with_tor(
     {
         Ok(stream) => Some(stream.into_inner()),
         Err(e) => {
-            println!("[SOCKS5 connection failed]: {}", e);
+            error!("[SOCKS5 connection failed]: {}", e);
             None
         }
     }
@@ -73,7 +74,7 @@ async fn connect_direct(config: &Config) -> Option<TcpStream> {
     match TcpStream::connect(addr).await {
         Ok(stream) => Some(stream),
         Err(e) => {
-            println!("[Direct connection failed]: {}", e);
+            error!("[Direct connection failed]: {}", e);
             None
         }
     }
@@ -111,7 +112,7 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
             }
             None => {
                 retries += 1;
-                println!("[{}] Retrying in 5 seconds... (retry #{})", id, retries);
+                warn!("[{}] Retrying in 5 seconds... (retry #{})", id, retries);
                 sleep(Duration::from_secs(5)).await;
             }
         }
@@ -150,7 +151,7 @@ pub async fn send_packet(
     stream: &mut TcpStream,
     state: &mut Arc<RwLock<ConnectionState>>,
 ) {
-    println!("Sending packet: {:?}", packet);
+    debug!("Sending packet: {:?}", packet);
     let mut data = packet.serialize(&state.read().await.state);
     data = compress(data, state.read().await.compression_threshold).unwrap();
     if state.read().await.encryption_enabled {
@@ -166,7 +167,7 @@ pub async fn send_packet(
 pub type SharedState = Arc<RwLock<ConnectionState>>;
 
 async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut state: SharedState) {
-    println!("[{}] Starting game loop", id);
+    info!("[{}] Starting game loop", id);
 
     let handshake = ServerboundHandshakePacket {
         next_state: 2,
@@ -206,25 +207,25 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
             .await
             .unwrap()
         } else {
-            println!("peeked: {:?}", buf);
+            debug!("peeked: {:?}", buf);
             read_var_int_from_stream(&mut stream).await.unwrap()
         };
 
         if !(1..=1_048_576).contains(&packet_length) {
-            println!("Invalid packet length: {}", packet_length);
+            error!("Invalid packet length: {}", packet_length);
         }
 
         let mut buffer = vec![0u8; packet_length as usize];
         stream.read_exact(&mut buffer).await.unwrap();
 
-        println!("[{}] Received packet: {:?}", id, buffer);
+        debug!("[{}] Received packet: {:?}", id, buffer);
 
         let packet = convert(buffer, &state).await;
         if packet.is_err() {
-            println!("[{}] Failed to convert packet: {:?}", id, packet);
+            error!("[{}] Failed to convert packet: {:?}", id, packet);
             continue;
         }
-        println!("[{}] Converted packet: {:?}", id, packet);
+        debug!("[{}] Converted packet: {:?}", id, packet);
         handle_packet(packet.unwrap(), &mut stream, state.clone()).await;
     }
 }
@@ -236,7 +237,7 @@ async fn handle_packet(
 ) {
     match packet1 {
         ClientboundPacket::EncryptionRequest(packet) => {
-            println!("[Clientbound] Encryption Request: {:?}", packet);
+            debug!("[Clientbound] Encryption Request: {:?}", packet);
             // Generate a random shared secret
             let mut shared_secret = vec![0u8; 16];
             rand::thread_rng().fill_bytes(&mut shared_secret);
@@ -263,7 +264,7 @@ async fn handle_packet(
 
             // Send the packet to the server
             send_packet(response, stream, &mut state).await;
-            println!("Sent encryption response");
+            debug!("Sent encryption response");
 
             // Enable encryption
             state.write().await.encryption_enabled = true;
@@ -271,43 +272,43 @@ async fn handle_packet(
             state.write().await.decrypt_cipher = Some(dec_cipher);
             state.write().await.encrypt_cipher = Some(enc_cipher);
 
-            println!("Encryption enabled");
+            debug!("Encryption enabled");
         }
         ClientboundPacket::LoginSucess(packet) => {
-            println!("[Clientbound] Login Success: {:?}", packet);
+            debug!("[Clientbound] Login Success: {:?}", packet);
             let login_confirmation =
                 ServerboundPacket::LoginAcknowledged(ServerboundLoginAcknowledgedPacket {});
             send_packet(login_confirmation, stream, &mut state).await;
             state.write().await.state = State::Configuration;
-            println!("State changed to Play");
+            debug!("State changed to Play");
         }
         ClientboundPacket::SetCompression(compression_packet) => {
-            println!("[Clientbound] Set Compression: {:?}", compression_packet);
+            debug!("[Clientbound] Set Compression: {:?}", compression_packet);
             let mut state = state.write().await;
             state.compression_threshold = compression_packet.threshold;
-            println!(
+            debug!(
                 "Compression threshold set to {}",
                 compression_packet.threshold
             );
         }
         ClientboundPacket::FinishConfiguration(packet) => {
-            println!("[Clientbound] Finish Configuration: {:?}", packet);
+            debug!("[Clientbound] Finish Configuration: {:?}", packet);
             state.write().await.state = State::Play;
-            println!("State changed to Play");
+            debug!("State changed to Play");
             let acknowledge_packet = ServerboundPacket::AcknowledgeFinishConfiguration(
                 ServerboundAcknowledgeFinishConfigurationPacket {},
             );
             send_packet(acknowledge_packet, stream, &mut state).await;
         }
         ClientboundPacket::KeepAlive(packet) => {
-            println!("[Clientbound] Keep Alive: {:?}", packet);
+            debug!("[Clientbound] Keep Alive: {:?}", packet);
             let keep_alive_packet = ServerboundPacket::KeepAlive(ServerboundKeepAlivePacket {
                 keep_alive_id: packet.keep_alive_id,
             });
             send_packet(keep_alive_packet, stream, &mut state).await;
         }
         ClientboundPacket::KnownPacks(packet) => {
-            println!("[Clientbound] Known Packs: {:?}", packet);
+            debug!("[Clientbound] Known Packs: {:?}", packet);
             let serverbound_packet = ServerboundKnownPacksPacket::from_clientbound(packet);
             send_packet(
                 ServerboundPacket::KnownPacks(serverbound_packet),

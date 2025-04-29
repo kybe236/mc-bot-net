@@ -29,6 +29,7 @@ use serverbound::{
     serverbound_login_packet::ServerboundLoginPacket,
 };
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::RwLock};
+use tracing::{debug, warn};
 
 use crate::{
     client::{ConnectionState, State},
@@ -307,78 +308,78 @@ pub async fn handle_packet_by_code(
     match state_packet {
         State::Handshake => {
             let rest = id;
-            println!("unsupported packet: {rest}");
+            warn!("unsupported packet: {rest} in handshake state");
         }
         State::Login => match id {
             0x00 => {
-                println!("Disconnect Packet Received");
+                debug!("Disconnect Packet Received");
                 let res = ClientboundDisconnectPacket::deserialize(data);
-                println!("{res:#?}");
+                debug!("{res:#?}");
                 return Ok(ClientboundPacket::Disconnect(res?));
             }
             0x01 => {
-                println!("received encryption request");
+                debug!("received encryption request");
                 let res = ClientboundEncryptionRequestPacket::deserialize(data).unwrap();
-                println!("{res:?}");
+                debug!("{res:?}");
 
                 return Ok(ClientboundPacket::EncryptionRequest(res));
             }
             0x02 => {
-                println!("Login Success Packet Received");
+                debug!("Login Success Packet Received");
                 let res = ClientboundLoginSucessPacket::deserialize(data).unwrap();
-                println!("{res:?}");
+                debug!("{res:?}");
                 return Ok(ClientboundPacket::LoginSucess(res));
             }
             0x03 => {
-                println!("received set compression packet");
+                debug!("received set compression packet");
                 let res = ClientboundSetCompressionPacket::deserialize(data).unwrap();
-                println!("{res:?}");
+                debug!("{res:?}");
 
                 return Ok(ClientboundPacket::SetCompression(res));
             }
             _ => {
-                println!("unsupported packet: {id}");
+                warn!("unsupported packet: {id} in login state");
             }
         },
         State::Configuration => match id {
             0x02 => {
-                println!("received finish configuration packet");
+                debug!("received finish configuration packet");
                 let res = ClientboundFinishConfigurationPacket::deserialize(data).unwrap();
-                println!("{res:?}");
+                debug!("{res:?}");
 
                 return Ok(ClientboundPacket::FinishConfiguration(res));
             }
             0x03 => {
-                println!("received acknowledge finish configuration packet");
+                debug!("received acknowledge finish configuration packet");
                 let res = ClientboundFinishConfigurationPacket::deserialize(data).unwrap();
-                println!("{res:?}");
+                debug!("{res:?}");
 
                 return Ok(ClientboundPacket::FinishConfiguration(res));
             }
             0x04 => {
-                println!("received keep alive packet");
+                debug!("received keep alive packet");
                 let res = ClientboundKeepAlivePacket::deserialize(data).unwrap();
-                println!("{res:?}");
+                debug!("{res:?}");
 
                 return Ok(ClientboundPacket::KeepAlive(res));
             }
             0x0E => {
-                println!("received known packs packet");
+                debug!("received known packs packet");
                 let res = ClientboundKnownPacksPacket::deserialize(data).unwrap();
-                println!("{res:?}");
+                debug!("{res:?}");
 
                 return Ok(ClientboundPacket::KnownPacks(res));
             }
             _ => {
-                println!("unsupported packet: {id}");
+                warn!("unsupported packet: {id} in configuration state");
             }
         },
         State::Status => {
-            println!("unsupported packet: {id}");
+            warn!("unsupported packet: {id} in status state");
         }
         State::Play => {
             let rest = id;
-            println!("unsupported packet: {rest}");
+            warn!("unsupported packet: {rest} in play state");
         }
     }
     Err(())

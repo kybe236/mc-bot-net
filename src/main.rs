@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use tracing::{error, info};
 
 mod client;
 mod config;
@@ -8,6 +9,18 @@ mod utils;
 #[tokio::main]
 async fn main() {
     let config = Arc::new(config::load_config("config.json").await);
+
+    let _ = tracing::subscriber::set_global_default(
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .with_target(false)
+            .with_thread_ids(true)
+            .with_ansi(true)
+            .with_level(true)
+            .finish(),
+    );
+
+    info!("Starting {} clients", config.client_count);
 
     let mut handles = vec![];
     for id in 0..config.client_count {
@@ -20,7 +33,7 @@ async fn main() {
 
     for handle in handles {
         if let Err(e) = handle.await {
-            eprintln!("Client task failed: {:?}", e);
+            error!("Client task failed: {:?}", e);
         }
     }
 }
