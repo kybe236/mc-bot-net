@@ -1,10 +1,11 @@
-pub fn read_boolean(buffer: &[u8], offset: Option<&mut usize>) -> bool {
+pub fn read_boolean(buffer: &[u8], offset: Option<&mut usize>) -> Option<bool> {
     let mut binding = 0;
     let offset = offset.unwrap_or(&mut binding);
 
     // Ensure the buffer has enough data (at least 1 byte)
     if buffer.len() < *offset + 1 {
-        panic!("Insufficient data to read a boolean");
+        // If the buffer is too small, return None
+        return None;
     }
 
     // Read the boolean as a byte (0x01 for true, 0x00 for false)
@@ -14,7 +15,7 @@ pub fn read_boolean(buffer: &[u8], offset: Option<&mut usize>) -> bool {
     *offset += 1;
 
     // Return true if byte is 0x01, false if byte is 0x00
-    byte == 0x01
+    Some(byte == 0x01)
 }
 
 #[allow(unused)]

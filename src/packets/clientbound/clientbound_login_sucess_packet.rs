@@ -24,7 +24,6 @@ pub struct ClientboundLoginSucessPacket {
     pub username: String,
     pub number_of_properties: i32,
     pub propertys: Vec<Property>,
-    pub strict_error_handling: bool,
 }
 
 impl PacketDeserialize for ClientboundLoginSucessPacket {
@@ -40,7 +39,7 @@ impl PacketDeserialize for ClientboundLoginSucessPacket {
             let value = read_string(&data, &mut index).unwrap();
             let is_signed = read_boolean(&data, Some(&mut index));
             let mut signature = None;
-            if is_signed {
+            if is_signed.is_some() && is_signed.unwrap() {
                 signature = Some(read_string(&data, &mut index).unwrap().to_string());
             }
 
@@ -48,20 +47,17 @@ impl PacketDeserialize for ClientboundLoginSucessPacket {
                 Property {
                     name,
                     value,
-                    signed: is_signed,
+                    signed: is_signed.is_some() && is_signed.unwrap(),
                     signature,
                 }
             });
         }
-
-        let strict_error_handling = read_boolean(&data, Some(&mut index));
 
         Ok(ClientboundLoginSucessPacket {
             uuid,
             username,
             number_of_properties,
             propertys,
-            strict_error_handling,
         })
     }
 }

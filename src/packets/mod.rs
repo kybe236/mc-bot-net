@@ -19,6 +19,7 @@ use rsa::{RsaPublicKey, pkcs1v15};
 use serverbound::{
     serverbound_encryption_response_packet::ServerboundEncryptionResponsePacket,
     serverbound_handshake_packet::ServerboundHandshakePacket,
+    serverbound_login_acknowledged_packet::ServerboundLoginAcknowledgedPacket,
     serverbound_login_packet::ServerboundLoginPacket,
 };
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::RwLock};
@@ -83,6 +84,7 @@ impl ClientboundPacket {
 pub enum ServerboundPacket {
     Handshake(ServerboundHandshakePacket),
     Login(ServerboundLoginPacket),
+    LoginAcknowledged(ServerboundLoginAcknowledgedPacket),
     EncryptionResponse(ServerboundEncryptionResponsePacket),
 }
 
@@ -93,6 +95,7 @@ impl ServerboundPacket {
             ServerboundPacket::Handshake(packet) => packet.serialize(state),
             ServerboundPacket::Login(packet) => packet.serialize(state),
             ServerboundPacket::EncryptionResponse(packet) => packet.serialize(state),
+            ServerboundPacket::LoginAcknowledged(packet) => packet.serialize(state),
         }
     }
 }

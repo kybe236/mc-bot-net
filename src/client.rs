@@ -17,6 +17,7 @@ use crate::{
         serverbound::{
             serverbound_encryption_response_packet::ServerboundEncryptionResponsePacket,
             serverbound_handshake_packet::ServerboundHandshakePacket,
+            serverbound_login_acknowledged_packet::ServerboundLoginAcknowledgedPacket,
             serverbound_login_packet::ServerboundLoginPacket,
         },
     },
@@ -215,9 +216,13 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
 
         println!("[{}] Received packet: {:?}", id, buffer);
 
-        let packet = convert(buffer, &state).await.unwrap();
+        let packet = convert(buffer, &state).await;
+        if packet.is_err() {
+            println!("[{}] Failed to convert packet: {:?}", id, packet);
+            continue;
+        }
         println!("[{}] Converted packet: {:?}", id, packet);
-        handle_packet(packet, &mut stream, state.clone()).await;
+        handle_packet(packet.unwrap(), &mut stream, state.clone()).await;
     }
 }
 
@@ -264,6 +269,14 @@ async fn handle_packet(
             state.write().await.encrypt_cipher = Some(enc_cipher);
 
             println!("Encryption enabled");
+        }
+        ClientboundPacket::LoginSucess(packet) => {
+            println!("[Clientbound] Login Success: {:?}", packet);
+            let login_confirmation =
+                ServerboundPacket::LoginAcknowledged(ServerboundLoginAcknowledgedPacket {});
+            send_packet(login_confirmation, stream, &mut state).await;
+            state.write().await.state = State::Play;
+            println!("State changed to Play");
         }
         ClientboundPacket::SetCompression(compression_packet) => {
             println!("[Clientbound] Set Compression: {:?}", compression_packet);

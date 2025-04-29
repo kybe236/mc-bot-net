@@ -1,3 +1,4 @@
 pub mod serverbound_encryption_response_packet;
 pub mod serverbound_handshake_packet;
+pub mod serverbound_login_acknowledged_packet;
 pub mod serverbound_login_packet;

@@ -30,7 +30,7 @@ impl PacketDeserialize for ClientboundEncryptionRequestPacket {
             server_id,
             public_key,
             verify_token,
-            should_authenticate,
+            should_authenticate: should_authenticate.is_some() && should_authenticate.unwrap(),
         })
     }
 }
