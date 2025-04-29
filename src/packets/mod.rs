@@ -373,11 +373,9 @@ pub async fn handle_packet_by_code(
                 println!("unsupported packet: {id}");
             }
         },
-        State::Status => match id {
-            _ => {
-                println!("unsupported packet: {id}");
-            }
-        },
+        State::Status => {
+            println!("unsupported packet: {id}");
+        }
         State::Play => {
             let rest = id;
             println!("unsupported packet: {rest}");

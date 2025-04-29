@@ -3,7 +3,7 @@
     "tor_proxy": "127.0.0.1:9050",
     "port": 25565,
     "addr": "localhost",
-    "client_count": 500,
+    "client_count": 50,
     "random_tor_node": true,
     "reuse_proxy_for_retries": 2
 }
