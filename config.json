@@ -1,0 +1,8 @@
+{
+    "use_tor": true,
+    "tor_proxy": "127.0.0.1:9050",
+    "addr": "jonarchy.com:25565",
+    "client_count": 5,
+    "random_tor_node": true,
+    "reuse_proxy_for_retries": 2
+}
