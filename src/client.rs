@@ -1,7 +1,6 @@
-use std::{sync::Arc, time::Duration};
-
 use rand::{Rng, distr::Alphanumeric};
-use tokio::{io::AsyncReadExt, net::TcpStream, time::sleep};
+use std::{sync::Arc, time::Duration};
+use tokio::{net::TcpStream, sync::RwLock, time::sleep};
 use tokio_socks::tcp::Socks5Stream;
 
 use crate::config::Config;
@@ -61,6 +60,7 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
     let mut retries = 0;
     let mut last_username = String::new();
     let mut last_password = String::new();
+    let state = Arc::new(RwLock::new(ConnectionState::default()));
 
     loop {
         let stream_result = if config.use_tor {
@@ -78,7 +78,7 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
         match stream_result {
             Some(stream) => {
                 retries = 0;
-                game_loop(id, stream, config.clone()).await;
+                game_loop(id, stream, config.clone(), state.clone()).await;
             }
             None => {
                 retries += 1;
@@ -89,65 +89,15 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
     }
 }
 
-async fn game_loop(id: usize, mut stream: TcpStream, _config: Arc<Config>) {
+#[derive(Debug, Default)]
+pub struct ConnectionState {
+    #[allow(unused)]
+    pub encryption_enabled: bool,
+    pub compression_threshold: Option<i32>,
+}
+
+pub type SharedState = Arc<RwLock<ConnectionState>>;
+
+async fn game_loop(id: usize, _stream: TcpStream, _config: Arc<Config>, _state: SharedState) {
     println!("[{}] Starting game loop", id);
-
-    loop {
-        if let Some(packet) = read_packet(&mut stream).await {
-            // Process packet here
-            println!("[{}] Received packet with data: {:?}", id, packet);
-        } else {
-            println!("[{}] Failed to read packet.", id);
-        }
-    }
-}
-
-async fn read_packet(stream: &mut TcpStream) -> Option<Vec<u8>> {
-    // Read the packet length (VarInt)
-    let mut len_buffer = vec![0; 5]; // Maximum size for a VarInt
-    let len = match stream.read_exact(&mut len_buffer).await {
-        Ok(_) => {
-            let mut cursor = std::io::Cursor::new(len_buffer);
-            read_varint(&mut cursor).await
-        }
-        Err(_) => return None,
-    };
-
-    if len > 0xFF_FF_FF {
-        // Validate packet length (max allowed)
-        return None;
-    }
-
-    // Read the packet ID (VarInt)
-    let mut id_buffer = vec![0; 5]; // Maximum size for a VarInt
-    let _id_len = match stream.read_exact(&mut id_buffer).await {
-        Ok(_) => {
-            let mut cursor = std::io::Cursor::new(id_buffer);
-            read_varint(&mut cursor).await
-        }
-        Err(_) => return None,
-    };
-
-    // Read the packet data (byte array)
-    let mut data = vec![0; len as usize];
-    if stream.read_exact(&mut data).await.is_err() {
-        return None;
-    }
-
-    Some(data)
-}
-
-async fn read_varint<R: tokio::io::AsyncReadExt + Unpin>(reader: &mut R) -> i32 {
-    let mut value = 0;
-    let mut bytes_read = 0;
-
-    loop {
-        let byte = reader.read_u8().await.unwrap(); // Read a single byte from the stream
-        value |= ((byte & 0x7F) as i32) << (7 * bytes_read);
-        if (byte & 0x80) == 0 {
-            break;
-        }
-        bytes_read += 1;
-    }
-    value
 }

@@ -1,6 +1,6 @@
 use tokio::{
     io::{self, AsyncReadExt},
-    net::tcp::OwnedReadHalf,
+    net::TcpStream,
 };
 
 const SEGMENT_BITS: u32 = 0x7F;
@@ -108,7 +108,7 @@ pub fn write_var_int(result: &mut Vec<u8>, value: &i32) {
 
 /// Reads a VarInt (i32) from a TCP stream asynchronously.
 #[allow(unused)]
-pub async fn read_var_int_from_stream(stream: &mut OwnedReadHalf) -> io::Result<i32> {
+pub async fn read_var_int_from_stream(stream: &mut TcpStream) -> io::Result<i32> {
     let mut num_read = 0;
     let mut value = 0u32;
 
