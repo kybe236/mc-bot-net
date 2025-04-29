@@ -1,11 +1,24 @@
 use rand::{Rng, distributions::Alphanumeric};
 use std::{sync::Arc, time::Duration};
-use tokio::{net::TcpStream, sync::RwLock, time::sleep};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    sync::RwLock,
+    time::sleep,
+};
 use tokio_socks::tcp::Socks5Stream;
 
 use crate::{
     config::Config,
-    packets::{Aes128CfbDec, Aes128CfbEnc},
+    packets::{
+        Aes128CfbDec, Aes128CfbEnc, ServerboundPacket, compress, encrypt_packet,
+        read_encrypted_var_int_from_stream,
+        serverbound::{
+            serverbound_handshake_packet::ServerboundHandshakePacket,
+            serverbound_login_packet::ServerboundLoginPacket,
+        },
+    },
+    utils::{cracked, data_types::varint::read_var_int_from_stream},
 };
 
 async fn connect_with_tor(
@@ -35,7 +48,7 @@ async fn connect_with_tor(
 
     match Socks5Stream::connect_with_password(
         proxy,
-        config.addr.clone(),
+        config.addr.clone() + ":" + &config.port.to_string(),
         last_username,
         last_password,
     )
@@ -50,7 +63,8 @@ async fn connect_with_tor(
 }
 
 async fn connect_direct(config: &Config) -> Option<TcpStream> {
-    match TcpStream::connect(&config.addr).await {
+    let addr = config.addr.clone() + ":" + &config.port.to_string();
+    match TcpStream::connect(addr).await {
         Ok(stream) => Some(stream),
         Err(e) => {
             println!("[Direct connection failed]: {}", e);
@@ -68,7 +82,7 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
         compression_threshold: -1,
         decrypt_cipher: None,
         encrypt_cipher: None,
-        state: State::Login,
+        state: State::Handshake,
     }));
 
     loop {
@@ -127,6 +141,81 @@ pub struct ConnectionState {
 
 pub type SharedState = Arc<RwLock<ConnectionState>>;
 
-async fn game_loop(id: usize, _stream: TcpStream, _config: Arc<Config>, _state: SharedState) {
+async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut state: SharedState) {
     println!("[{}] Starting game loop", id);
+
+    let handshake = ServerboundHandshakePacket {
+        next_state: 2,
+        protocol_version: 770,
+        server_address: config.addr.clone(),
+        server_port: config.port,
+    };
+
+    send_packet(
+        ServerboundPacket::ServerboundHandshakePacket(handshake),
+        &mut stream,
+        &mut state,
+    )
+    .await;
+
+    state.write().await.state = State::Login;
+
+    let login = ServerboundLoginPacket {
+        username: format!("Player_{}", id),
+        uuid: cracked::name_to_uuid(&format!("Player_{}", id)),
+    };
+
+    send_packet(
+        ServerboundPacket::ServerboundLoginPacket(login),
+        &mut stream,
+        &mut state,
+    )
+    .await;
+
+    loop {
+        let mut buf = [0u8; 1];
+        stream.peek(&mut buf).await.unwrap();
+        if buf == [0u8] {
+            continue;
+        };
+
+        let packet_length = if state.read().await.encryption_enabled {
+            read_encrypted_var_int_from_stream(
+                &mut stream,
+                state.write().await.decrypt_cipher.as_mut().unwrap(),
+            )
+            .await
+            .unwrap()
+        } else {
+            println!("peeked: {:?}", buf);
+            read_var_int_from_stream(&mut stream).await.unwrap()
+        };
+
+        if !(1..=1_048_576).contains(&packet_length) {
+            println!("Invalid packet length: {}", packet_length);
+        }
+
+        let mut buffer = vec![0u8; packet_length as usize];
+        stream.read_exact(&mut buffer).await.unwrap();
+
+        println!("[{}] Received packet: {:?}", id, buffer);
+    }
+}
+
+pub async fn send_packet(
+    packet: ServerboundPacket,
+    stream: &mut TcpStream,
+    state: &mut Arc<RwLock<ConnectionState>>,
+) {
+    println!("Sending packet: {:?}", packet);
+    let mut data = packet.serialize(&state.read().await.state);
+    data = compress(data, state.read().await.compression_threshold).unwrap();
+    if state.read().await.encryption_enabled {
+        encrypt_packet(
+            state.write().await.encrypt_cipher.as_mut().unwrap(),
+            &mut data,
+        );
+    }
+
+    stream.write_all(&data).await.unwrap();
 }

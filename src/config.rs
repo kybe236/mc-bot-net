@@ -5,6 +5,7 @@ use std::fs;
 pub struct Config {
     pub use_tor: bool,
     pub tor_proxy: Option<String>,
+    pub port: u16,
     pub addr: String,
     pub client_count: usize,
     pub random_tor_node: Option<bool>,

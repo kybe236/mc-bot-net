@@ -13,3 +13,7 @@ flate2 = "1.1.1"
 aes = "0.8"
 cfb8 = "0.8"
 rsa = "0.9"
+
+[dependencies.uuid]
+version = "*"
+features = ["v3"]

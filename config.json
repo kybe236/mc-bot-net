@@ -1,7 +1,8 @@
 {
-    "use_tor": true,
+    "use_tor": false,
     "tor_proxy": "127.0.0.1:9050",
-    "addr": "jonarchy.com:25565",
+    "port": 25565,
+    "addr": "localhost",
     "client_count": 5,
     "random_tor_node": true,
     "reuse_proxy_for_retries": 2

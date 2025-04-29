@@ -10,16 +10,22 @@ use aes::{
 use cfb8::cipher::inout::InOutBuf;
 use flate2::{Compression, bufread::ZlibDecoder, write::ZlibEncoder};
 use rsa::{RsaPublicKey, pkcs1v15};
-use tokio::{io::AsyncReadExt, net::unix::OwnedReadHalf, sync::Mutex};
+use serverbound::{
+    serverbound_handshake_packet::ServerboundHandshakePacket,
+    serverbound_login_packet::ServerboundLoginPacket,
+};
+use tokio::{io::AsyncReadExt, net::TcpStream, sync::Mutex};
 
 use crate::{
     client::{ConnectionState, State},
     utils::data_types::varint::{read_var_int, write_var_int},
 };
 
+pub mod serverbound;
+
 #[allow(unused)]
 pub trait PacketSerialize {
-    fn serialize(&self, state: &ConnectionState) -> Vec<u8>;
+    fn serialize(&self, state: &State) -> Vec<u8>;
 }
 
 #[allow(unused)]
@@ -45,13 +51,18 @@ impl ClientboundPacket {
 
 #[derive(Debug)]
 #[allow(unused)]
-pub enum ServerboundPacket {}
+pub enum ServerboundPacket {
+    ServerboundHandshakePacket(ServerboundHandshakePacket),
+    ServerboundLoginPacket(ServerboundLoginPacket),
+}
 
 impl ServerboundPacket {
     #[allow(unused)]
-    pub fn serialize(&self, state: &ConnectionState) -> Vec<u8> {
-        println!("Unknown packet ID: {}", 0);
-        Vec::new()
+    pub fn serialize(&self, state: &State) -> Vec<u8> {
+        match self {
+            ServerboundPacket::ServerboundHandshakePacket(packet) => packet.serialize(state),
+            ServerboundPacket::ServerboundLoginPacket(packet) => packet.serialize(state),
+        }
     }
 }
 
@@ -208,7 +219,7 @@ pub fn decrypt_packet(cipher: &mut Aes128CfbDec, packet: &mut [u8]) {
 }
 #[allow(unused)]
 pub async fn read_encrypted_var_int_from_stream(
-    stream: &mut OwnedReadHalf,
+    stream: &mut TcpStream,
     cipher: &mut Aes128CfbDec,
 ) -> Result<i32, ()> {
     let mut num_read = 0;
