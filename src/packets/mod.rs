@@ -11,14 +11,20 @@ use cfb8::cipher::inout::InOutBuf;
 use clientbound::{
     clientbound_disconnect_packet::ClientboundDisconnectPacket,
     clientbound_encryption_request_packet::ClientboundEncryptionRequestPacket,
+    clientbound_finish_configuration_packet::ClientboundFinishConfigurationPacket,
+    clientbound_keep_alive_packet::ClientboundKeepAlivePacket,
+    clientbound_known_packs_packet::ClientboundKnownPacksPacket,
     clientbound_login_sucess_packet::ClientboundLoginSucessPacket,
     clientbound_set_compression_packet::ClientboundSetCompressionPacket,
 };
 use flate2::{Compression, bufread::ZlibDecoder, write::ZlibEncoder};
 use rsa::{RsaPublicKey, pkcs1v15};
 use serverbound::{
+    serverbound_acknowledge_finish_configuration_packet::ServerboundAcknowledgeFinishConfigurationPacket,
     serverbound_encryption_response_packet::ServerboundEncryptionResponsePacket,
     serverbound_handshake_packet::ServerboundHandshakePacket,
+    serverbound_keep_alive_packet::ServerboundKeepAlivePacket,
+    serverbound_known_packs_packet::ServerboundKnownPacksPacket,
     serverbound_login_acknowledged_packet::ServerboundLoginAcknowledgedPacket,
     serverbound_login_packet::ServerboundLoginPacket,
 };
@@ -49,34 +55,9 @@ pub enum ClientboundPacket {
     Disconnect(ClientboundDisconnectPacket),
     SetCompression(ClientboundSetCompressionPacket),
     LoginSucess(ClientboundLoginSucessPacket),
-}
-
-impl ClientboundPacket {
-    #[allow(unused)]
-    pub fn deserialize(
-        packet_id: i32,
-        data: Vec<u8>,
-        state: &ConnectionState,
-    ) -> Result<ClientboundPacket, ()> {
-        match packet_id {
-            0x00 => Ok(ClientboundPacket::Disconnect(
-                ClientboundDisconnectPacket::deserialize(data)?,
-            )),
-            0x01 => Ok(ClientboundPacket::EncryptionRequest(
-                ClientboundEncryptionRequestPacket::deserialize(data)?,
-            )),
-            0x02 => Ok(ClientboundPacket::LoginSucess(
-                ClientboundLoginSucessPacket::deserialize(data)?,
-            )),
-            0x03 => Ok(ClientboundPacket::SetCompression(
-                ClientboundSetCompressionPacket::deserialize(data)?,
-            )),
-            _ => {
-                println!("Unknown packet ID: {}", packet_id);
-                Err(())
-            }
-        }
-    }
+    FinishConfiguration(ClientboundFinishConfigurationPacket),
+    KeepAlive(ClientboundKeepAlivePacket),
+    KnownPacks(ClientboundKnownPacksPacket),
 }
 
 #[derive(Debug)]
@@ -86,6 +67,9 @@ pub enum ServerboundPacket {
     Login(ServerboundLoginPacket),
     LoginAcknowledged(ServerboundLoginAcknowledgedPacket),
     EncryptionResponse(ServerboundEncryptionResponsePacket),
+    AcknowledgeFinishConfiguration(ServerboundAcknowledgeFinishConfigurationPacket),
+    KeepAlive(ServerboundKeepAlivePacket),
+    KnownPacks(ServerboundKnownPacksPacket),
 }
 
 impl ServerboundPacket {
@@ -96,6 +80,9 @@ impl ServerboundPacket {
             ServerboundPacket::Login(packet) => packet.serialize(state),
             ServerboundPacket::EncryptionResponse(packet) => packet.serialize(state),
             ServerboundPacket::LoginAcknowledged(packet) => packet.serialize(state),
+            ServerboundPacket::AcknowledgeFinishConfiguration(packet) => packet.serialize(state),
+            ServerboundPacket::KeepAlive(packet) => packet.serialize(state),
+            ServerboundPacket::KnownPacks(packet) => packet.serialize(state),
         }
     }
 }
@@ -353,14 +340,44 @@ pub async fn handle_packet_by_code(
                 println!("unsupported packet: {id}");
             }
         },
-        State::Configuration => {
-            let rest = id;
-            println!("unsupported packet: {rest}");
-        }
-        State::Status => {
-            let rest = id;
-            println!("unsupported packet: {rest}");
-        }
+        State::Configuration => match id {
+            0x02 => {
+                println!("received finish configuration packet");
+                let res = ClientboundFinishConfigurationPacket::deserialize(data).unwrap();
+                println!("{res:?}");
+
+                return Ok(ClientboundPacket::FinishConfiguration(res));
+            }
+            0x03 => {
+                println!("received acknowledge finish configuration packet");
+                let res = ClientboundFinishConfigurationPacket::deserialize(data).unwrap();
+                println!("{res:?}");
+
+                return Ok(ClientboundPacket::FinishConfiguration(res));
+            }
+            0x04 => {
+                println!("received keep alive packet");
+                let res = ClientboundKeepAlivePacket::deserialize(data).unwrap();
+                println!("{res:?}");
+
+                return Ok(ClientboundPacket::KeepAlive(res));
+            }
+            0x0E => {
+                println!("received known packs packet");
+                let res = ClientboundKnownPacksPacket::deserialize(data).unwrap();
+                println!("{res:?}");
+
+                return Ok(ClientboundPacket::KnownPacks(res));
+            }
+            _ => {
+                println!("unsupported packet: {id}");
+            }
+        },
+        State::Status => match id {
+            _ => {
+                println!("unsupported packet: {id}");
+            }
+        },
         State::Play => {
             let rest = id;
             println!("unsupported packet: {rest}");

@@ -1,4 +1,7 @@
+pub mod serverbound_acknowledge_finish_configuration_packet;
 pub mod serverbound_encryption_response_packet;
 pub mod serverbound_handshake_packet;
+pub mod serverbound_keep_alive_packet;
+pub mod serverbound_known_packs_packet;
 pub mod serverbound_login_acknowledged_packet;
 pub mod serverbound_login_packet;

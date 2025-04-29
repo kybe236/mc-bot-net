@@ -15,8 +15,11 @@ use crate::{
         Aes128CfbDec, Aes128CfbEnc, ClientboundPacket, ServerboundPacket, compress, convert,
         create_cipher, encrypt, encrypt_packet, read_encrypted_var_int_from_stream,
         serverbound::{
+            serverbound_acknowledge_finish_configuration_packet::ServerboundAcknowledgeFinishConfigurationPacket,
             serverbound_encryption_response_packet::ServerboundEncryptionResponsePacket,
             serverbound_handshake_packet::ServerboundHandshakePacket,
+            serverbound_keep_alive_packet::ServerboundKeepAlivePacket,
+            serverbound_known_packs_packet::ServerboundKnownPacksPacket,
             serverbound_login_acknowledged_packet::ServerboundLoginAcknowledgedPacket,
             serverbound_login_packet::ServerboundLoginPacket,
         },
@@ -167,7 +170,7 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
 
     let handshake = ServerboundHandshakePacket {
         next_state: 2,
-        protocol_version: 765,
+        protocol_version: 770,
         server_address: config.addr.clone(),
         server_port: config.port,
     };
@@ -275,7 +278,7 @@ async fn handle_packet(
             let login_confirmation =
                 ServerboundPacket::LoginAcknowledged(ServerboundLoginAcknowledgedPacket {});
             send_packet(login_confirmation, stream, &mut state).await;
-            state.write().await.state = State::Play;
+            state.write().await.state = State::Configuration;
             println!("State changed to Play");
         }
         ClientboundPacket::SetCompression(compression_packet) => {
@@ -286,6 +289,32 @@ async fn handle_packet(
                 "Compression threshold set to {}",
                 compression_packet.threshold
             );
+        }
+        ClientboundPacket::FinishConfiguration(packet) => {
+            println!("[Clientbound] Finish Configuration: {:?}", packet);
+            state.write().await.state = State::Play;
+            println!("State changed to Play");
+            let acknowledge_packet = ServerboundPacket::AcknowledgeFinishConfiguration(
+                ServerboundAcknowledgeFinishConfigurationPacket {},
+            );
+            send_packet(acknowledge_packet, stream, &mut state).await;
+        }
+        ClientboundPacket::KeepAlive(packet) => {
+            println!("[Clientbound] Keep Alive: {:?}", packet);
+            let keep_alive_packet = ServerboundPacket::KeepAlive(ServerboundKeepAlivePacket {
+                keep_alive_id: packet.keep_alive_id,
+            });
+            send_packet(keep_alive_packet, stream, &mut state).await;
+        }
+        ClientboundPacket::KnownPacks(packet) => {
+            println!("[Clientbound] Known Packs: {:?}", packet);
+            let serverbound_packet = ServerboundKnownPacksPacket::from_clientbound(packet);
+            send_packet(
+                ServerboundPacket::KnownPacks(serverbound_packet),
+                stream,
+                &mut state,
+            )
+            .await;
         }
         _ => {}
     }
