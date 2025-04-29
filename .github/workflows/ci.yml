@@ -1,0 +1,20 @@
+name: Rust CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Run Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Build
+      run: cargo build --release
+
+    - name: Run tests
+      run: cargo test
