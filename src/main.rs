@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 mod client;
 mod config;
-mod packet;
 mod packets;
 mod utils;
 

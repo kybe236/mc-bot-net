@@ -1,4 +1,7 @@
-use std::io::{self, Error, ErrorKind, Read, Write};
+use std::{
+    io::{self, Error, ErrorKind, Read, Write},
+    sync::Arc,
+};
 
 use aes::{
     Aes128,
@@ -7,10 +10,10 @@ use aes::{
 use cfb8::cipher::inout::InOutBuf;
 use flate2::{Compression, bufread::ZlibDecoder, write::ZlibEncoder};
 use rsa::{RsaPublicKey, pkcs1v15};
-use tokio::{io::AsyncReadExt, net::unix::OwnedReadHalf};
+use tokio::{io::AsyncReadExt, net::unix::OwnedReadHalf, sync::Mutex};
 
 use crate::{
-    client::ConnectionState,
+    client::{ConnectionState, State},
     utils::data_types::varint::{read_var_int, write_var_int},
 };
 
@@ -233,4 +236,63 @@ pub async fn read_encrypted_var_int_from_stream(
     }
 
     Ok(value as i32)
+}
+
+#[allow(unused)]
+pub async fn convert(
+    mut data: Vec<u8>,
+    state: &Arc<Mutex<ConnectionState>>,
+) -> Result<ClientboundPacket, ()> {
+    if state.lock().await.encryption_enabled {
+        decrypt_packet(
+            state.lock().await.decrypt_cipher.as_mut().unwrap(),
+            &mut data,
+        );
+    }
+
+    let res = decompress(data, state.lock().await.compression_threshold).unwrap();
+
+    data_to_packet(res, state).await
+}
+
+#[allow(unused)]
+pub async fn data_to_packet(
+    data: Vec<u8>,
+    state: &Arc<Mutex<ConnectionState>>,
+) -> Result<ClientboundPacket, ()> {
+    let mut offset = 0;
+    let packet_id = read_var_int(&data, Some(&mut offset));
+
+    // Handle the packet by its ID
+    handle_packet_by_code(packet_id, data[offset..].to_vec(), state).await
+}
+
+pub async fn handle_packet_by_code(
+    id: i32,
+    _data: Vec<u8>,
+    state: &Arc<Mutex<ConnectionState>>,
+) -> Result<ClientboundPacket, ()> {
+    match state.lock().await.state {
+        State::Handshake => {
+            let rest = id;
+            println!("unsupported packet: {rest}");
+        }
+        State::Login => {
+            let rest = id;
+            println!("unsupported packet: {rest}");
+        }
+        State::Configuration => {
+            let rest = id;
+            println!("unsupported packet: {rest}");
+        }
+        State::Status => {
+            let rest = id;
+            println!("unsupported packet: {rest}");
+        }
+        State::Play => {
+            let rest = id;
+            println!("unsupported packet: {rest}");
+        }
+    }
+    Err(())
 }

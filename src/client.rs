@@ -3,7 +3,10 @@ use std::{sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::RwLock, time::sleep};
 use tokio_socks::tcp::Socks5Stream;
 
-use crate::config::Config;
+use crate::{
+    config::Config,
+    packets::{Aes128CfbDec, Aes128CfbEnc},
+};
 
 async fn connect_with_tor(
     config: &Config,
@@ -60,7 +63,13 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
     let mut retries = 0;
     let mut last_username = String::new();
     let mut last_password = String::new();
-    let state = Arc::new(RwLock::new(ConnectionState::default()));
+    let state = Arc::new(RwLock::new(ConnectionState {
+        encryption_enabled: false,
+        compression_threshold: -1,
+        decrypt_cipher: None,
+        encrypt_cipher: None,
+        state: State::Login,
+    }));
 
     loop {
         let stream_result = if config.use_tor {
@@ -89,11 +98,31 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum State {
+    Login,
+    #[allow(unused)]
+    Configuration,
+    #[allow(unused)]
+    Status,
+    #[allow(unused)]
+    Play,
+    #[allow(unused)]
+    Handshake,
+}
+
+#[derive(Debug)]
 pub struct ConnectionState {
     #[allow(unused)]
     pub encryption_enabled: bool,
-    pub compression_threshold: Option<i32>,
+    #[allow(unused)]
+    pub compression_threshold: i32,
+    #[allow(unused)]
+    pub decrypt_cipher: Option<Aes128CfbDec>,
+    #[allow(unused)]
+    pub encrypt_cipher: Option<Aes128CfbEnc>,
+    #[allow(unused)]
+    pub state: State,
 }
 
 pub type SharedState = Arc<RwLock<ConnectionState>>;
