@@ -8,19 +8,27 @@ use aes::{
     cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit, generic_array::GenericArray},
 };
 use cfb8::cipher::inout::InOutBuf;
+use clientbound::{
+    clientbound_disconnect_packet::ClientboundDisconnectPacket,
+    clientbound_encryption_request_packet::ClientboundEncryptionRequestPacket,
+    clientbound_login_sucess_packet::ClientboundLoginSucessPacket,
+    clientbound_set_compression_packet::ClientboundSetCompressionPacket,
+};
 use flate2::{Compression, bufread::ZlibDecoder, write::ZlibEncoder};
 use rsa::{RsaPublicKey, pkcs1v15};
 use serverbound::{
+    serverbound_encryption_response_packet::ServerboundEncryptionResponsePacket,
     serverbound_handshake_packet::ServerboundHandshakePacket,
     serverbound_login_packet::ServerboundLoginPacket,
 };
-use tokio::{io::AsyncReadExt, net::TcpStream, sync::Mutex};
+use tokio::{io::AsyncReadExt, net::TcpStream, sync::RwLock};
 
 use crate::{
     client::{ConnectionState, State},
     utils::data_types::varint::{read_var_int, write_var_int},
 };
 
+pub mod clientbound;
 pub mod serverbound;
 
 #[allow(unused)]
@@ -35,7 +43,12 @@ pub trait PacketDeserialize: Sized {
 
 #[allow(unused)]
 #[derive(Debug)]
-pub enum ClientboundPacket {}
+pub enum ClientboundPacket {
+    EncryptionRequest(ClientboundEncryptionRequestPacket),
+    Disconnect(ClientboundDisconnectPacket),
+    SetCompression(ClientboundSetCompressionPacket),
+    LoginSucess(ClientboundLoginSucessPacket),
+}
 
 impl ClientboundPacket {
     #[allow(unused)]
@@ -44,24 +57,42 @@ impl ClientboundPacket {
         data: Vec<u8>,
         state: &ConnectionState,
     ) -> Result<ClientboundPacket, ()> {
-        println!("Unknown packet ID: {}", packet_id);
-        Err(())
+        match packet_id {
+            0x00 => Ok(ClientboundPacket::Disconnect(
+                ClientboundDisconnectPacket::deserialize(data)?,
+            )),
+            0x01 => Ok(ClientboundPacket::EncryptionRequest(
+                ClientboundEncryptionRequestPacket::deserialize(data)?,
+            )),
+            0x02 => Ok(ClientboundPacket::LoginSucess(
+                ClientboundLoginSucessPacket::deserialize(data)?,
+            )),
+            0x03 => Ok(ClientboundPacket::SetCompression(
+                ClientboundSetCompressionPacket::deserialize(data)?,
+            )),
+            _ => {
+                println!("Unknown packet ID: {}", packet_id);
+                Err(())
+            }
+        }
     }
 }
 
 #[derive(Debug)]
 #[allow(unused)]
 pub enum ServerboundPacket {
-    ServerboundHandshakePacket(ServerboundHandshakePacket),
-    ServerboundLoginPacket(ServerboundLoginPacket),
+    Handshake(ServerboundHandshakePacket),
+    Login(ServerboundLoginPacket),
+    EncryptionResponse(ServerboundEncryptionResponsePacket),
 }
 
 impl ServerboundPacket {
     #[allow(unused)]
     pub fn serialize(&self, state: &State) -> Vec<u8> {
         match self {
-            ServerboundPacket::ServerboundHandshakePacket(packet) => packet.serialize(state),
-            ServerboundPacket::ServerboundLoginPacket(packet) => packet.serialize(state),
+            ServerboundPacket::Handshake(packet) => packet.serialize(state),
+            ServerboundPacket::Login(packet) => packet.serialize(state),
+            ServerboundPacket::EncryptionResponse(packet) => packet.serialize(state),
         }
     }
 }
@@ -154,32 +185,30 @@ pub fn compress(data: Vec<u8>, compress_threshold: i32) -> Result<Vec<u8>, std::
     }
 }
 
-#[allow(unused)]
 pub fn decompress(data: Vec<u8>, compress_threshold: i32) -> Result<Vec<u8>, std::io::Error> {
+    // If compression threshold is -1, no decompression is needed
     if compress_threshold == -1 {
-        return Ok(data);
-    }
-
-    let mut offset = 0;
-    let data_length = read_var_int(&data, Some(&mut offset));
-
-    if offset > data.len() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::UnexpectedEof,
-            "Invalid offset",
-        ));
-    }
-
-    if data_length == 0 {
-        // Packet is uncompressed, data starts after length
-        Ok(data[offset..].to_vec())
+        Ok(data)
     } else {
-        // Compressed data starts at offset
-        let compressed_data = &data[offset..];
-        let mut decoder = ZlibDecoder::new(compressed_data);
-        let mut decompressed_data = Vec::new();
-        decoder.read_to_end(&mut decompressed_data)?;
-        Ok(decompressed_data)
+        let mut offset = 0;
+
+        // Read the data length (varint)
+        let data_length = read_var_int(&data, Some(&mut offset));
+
+        // If the length is 0, just return the data from the offset onward
+        if data_length == 0x00 {
+            Ok(data[offset..].to_vec())
+        } else {
+            // Get the compressed data (assuming it's from the current offset)
+            let compressed_data = &data[offset..];
+
+            // Use ZlibDecoder to decompress the data
+            let mut decoder = ZlibDecoder::new(compressed_data);
+            let mut decompressed_data = Vec::new();
+            decoder.read_to_end(&mut decompressed_data)?;
+
+            Ok(decompressed_data)
+        }
     }
 }
 
@@ -217,6 +246,7 @@ pub fn decrypt_packet(cipher: &mut Aes128CfbDec, packet: &mut [u8]) {
     assert!(rest.is_empty());
     cipher.decrypt_blocks_inout_mut(chunks);
 }
+
 #[allow(unused)]
 pub async fn read_encrypted_var_int_from_stream(
     stream: &mut TcpStream,
@@ -252,16 +282,16 @@ pub async fn read_encrypted_var_int_from_stream(
 #[allow(unused)]
 pub async fn convert(
     mut data: Vec<u8>,
-    state: &Arc<Mutex<ConnectionState>>,
+    state: &Arc<RwLock<ConnectionState>>,
 ) -> Result<ClientboundPacket, ()> {
-    if state.lock().await.encryption_enabled {
+    if state.read().await.encryption_enabled {
         decrypt_packet(
-            state.lock().await.decrypt_cipher.as_mut().unwrap(),
+            &mut state.write().await.decrypt_cipher.clone().unwrap(),
             &mut data,
         );
     }
 
-    let res = decompress(data, state.lock().await.compression_threshold).unwrap();
+    let res = decompress(data, state.read().await.compression_threshold).unwrap();
 
     data_to_packet(res, state).await
 }
@@ -269,7 +299,7 @@ pub async fn convert(
 #[allow(unused)]
 pub async fn data_to_packet(
     data: Vec<u8>,
-    state: &Arc<Mutex<ConnectionState>>,
+    state: &Arc<RwLock<ConnectionState>>,
 ) -> Result<ClientboundPacket, ()> {
     let mut offset = 0;
     let packet_id = read_var_int(&data, Some(&mut offset));
@@ -280,18 +310,46 @@ pub async fn data_to_packet(
 
 pub async fn handle_packet_by_code(
     id: i32,
-    _data: Vec<u8>,
-    state: &Arc<Mutex<ConnectionState>>,
+    data: Vec<u8>,
+    state: &Arc<RwLock<ConnectionState>>,
 ) -> Result<ClientboundPacket, ()> {
-    match state.lock().await.state {
+    let state_packet = state.read().await.state.clone();
+    match state_packet {
         State::Handshake => {
             let rest = id;
             println!("unsupported packet: {rest}");
         }
-        State::Login => {
-            let rest = id;
-            println!("unsupported packet: {rest}");
-        }
+        State::Login => match id {
+            0x00 => {
+                println!("Disconnect Packet Received");
+                let res = ClientboundDisconnectPacket::deserialize(data);
+                println!("{res:#?}");
+                return Ok(ClientboundPacket::Disconnect(res?));
+            }
+            0x01 => {
+                println!("received encryption request");
+                let res = ClientboundEncryptionRequestPacket::deserialize(data).unwrap();
+                println!("{res:?}");
+
+                return Ok(ClientboundPacket::EncryptionRequest(res));
+            }
+            0x02 => {
+                println!("Login Success Packet Received");
+                let res = ClientboundLoginSucessPacket::deserialize(data).unwrap();
+                println!("{res:?}");
+                return Ok(ClientboundPacket::LoginSucess(res));
+            }
+            0x03 => {
+                println!("received set compression packet");
+                let res = ClientboundSetCompressionPacket::deserialize(data).unwrap();
+                println!("{res:?}");
+
+                return Ok(ClientboundPacket::SetCompression(res));
+            }
+            _ => {
+                println!("unsupported packet: {id}");
+            }
+        },
         State::Configuration => {
             let rest = id;
             println!("unsupported packet: {rest}");

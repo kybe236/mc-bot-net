@@ -1,4 +1,5 @@
-use rand::{Rng, distributions::Alphanumeric};
+use rand::{Rng, RngCore, distributions::Alphanumeric};
+use rsa::{RsaPublicKey, pkcs8::DecodePublicKey};
 use std::{sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -11,9 +12,10 @@ use tokio_socks::tcp::Socks5Stream;
 use crate::{
     config::Config,
     packets::{
-        Aes128CfbDec, Aes128CfbEnc, ServerboundPacket, compress, encrypt_packet,
-        read_encrypted_var_int_from_stream,
+        Aes128CfbDec, Aes128CfbEnc, ClientboundPacket, ServerboundPacket, compress, convert,
+        create_cipher, encrypt, encrypt_packet, read_encrypted_var_int_from_stream,
         serverbound::{
+            serverbound_encryption_response_packet::ServerboundEncryptionResponsePacket,
             serverbound_handshake_packet::ServerboundHandshakePacket,
             serverbound_login_packet::ServerboundLoginPacket,
         },
@@ -139,6 +141,24 @@ pub struct ConnectionState {
     pub state: State,
 }
 
+pub async fn send_packet(
+    packet: ServerboundPacket,
+    stream: &mut TcpStream,
+    state: &mut Arc<RwLock<ConnectionState>>,
+) {
+    println!("Sending packet: {:?}", packet);
+    let mut data = packet.serialize(&state.read().await.state);
+    data = compress(data, state.read().await.compression_threshold).unwrap();
+    if state.read().await.encryption_enabled {
+        encrypt_packet(
+            state.write().await.encrypt_cipher.as_mut().unwrap(),
+            &mut data,
+        );
+    }
+
+    stream.write_all(&data).await.unwrap();
+}
+
 pub type SharedState = Arc<RwLock<ConnectionState>>;
 
 async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut state: SharedState) {
@@ -146,13 +166,13 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
 
     let handshake = ServerboundHandshakePacket {
         next_state: 2,
-        protocol_version: 770,
+        protocol_version: 765,
         server_address: config.addr.clone(),
         server_port: config.port,
     };
 
     send_packet(
-        ServerboundPacket::ServerboundHandshakePacket(handshake),
+        ServerboundPacket::Handshake(handshake),
         &mut stream,
         &mut state,
     )
@@ -165,12 +185,7 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
         uuid: cracked::name_to_uuid(&format!("Player_{}", id)),
     };
 
-    send_packet(
-        ServerboundPacket::ServerboundLoginPacket(login),
-        &mut stream,
-        &mut state,
-    )
-    .await;
+    send_packet(ServerboundPacket::Login(login), &mut stream, &mut state).await;
 
     loop {
         let mut buf = [0u8; 1];
@@ -199,23 +214,66 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
         stream.read_exact(&mut buffer).await.unwrap();
 
         println!("[{}] Received packet: {:?}", id, buffer);
+
+        let packet = convert(buffer, &state).await.unwrap();
+        println!("[{}] Converted packet: {:?}", id, packet);
+        handle_packet(packet, &mut stream, state.clone()).await;
     }
 }
 
-pub async fn send_packet(
-    packet: ServerboundPacket,
+async fn handle_packet(
+    packet1: ClientboundPacket,
     stream: &mut TcpStream,
-    state: &mut Arc<RwLock<ConnectionState>>,
+    mut state: Arc<RwLock<ConnectionState>>,
 ) {
-    println!("Sending packet: {:?}", packet);
-    let mut data = packet.serialize(&state.read().await.state);
-    data = compress(data, state.read().await.compression_threshold).unwrap();
-    if state.read().await.encryption_enabled {
-        encrypt_packet(
-            state.write().await.encrypt_cipher.as_mut().unwrap(),
-            &mut data,
-        );
-    }
+    match packet1 {
+        ClientboundPacket::EncryptionRequest(packet) => {
+            println!("[Clientbound] Encryption Request: {:?}", packet);
+            // Generate a random shared secret
+            let mut shared_secret = vec![0u8; 16];
+            rand::thread_rng().fill_bytes(&mut shared_secret);
 
-    stream.write_all(&data).await.unwrap();
+            // Parse the DER-encoded public key
+            let public_key = RsaPublicKey::from_public_key_der(&packet.public_key)
+                .map_err(|e| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("public key error: {e}"),
+                    )
+                })
+                .unwrap();
+
+            let encrypted_shared_secret = encrypt(&public_key, &shared_secret).unwrap();
+            let encrypted_verify_token = encrypt(&public_key, &packet.verify_token).unwrap();
+
+            // Create the Encryption Response packet
+            let response =
+                ServerboundPacket::EncryptionResponse(ServerboundEncryptionResponsePacket {
+                    shared_secret: encrypted_shared_secret,
+                    verify_token: encrypted_verify_token,
+                });
+
+            // Send the packet to the server
+            send_packet(response, stream, &mut state).await;
+            println!("Sent encryption response");
+
+            // Enable encryption
+            state.write().await.encryption_enabled = true;
+            let (enc_cipher, dec_cipher) = create_cipher(&shared_secret);
+            state.write().await.decrypt_cipher = Some(dec_cipher);
+            state.write().await.encrypt_cipher = Some(enc_cipher);
+
+            println!("Encryption enabled");
+        }
+        ClientboundPacket::SetCompression(compression_packet) => {
+            println!("[Clientbound] Set Compression: {:?}", compression_packet);
+            let mut state = state.write().await;
+            state.compression_threshold = compression_packet.threshold;
+            println!(
+                "Compression threshold set to {}",
+                compression_packet.threshold
+            );
+        }
+        _ => {}
+    }
 }
