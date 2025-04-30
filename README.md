@@ -10,7 +10,10 @@
 | Implement block retrieval |
 
 ## Info
-- Current protocol version: **770**
+Current protocol version: **770**
+
+## Download
+Download the latest version [here](https://github.com/kybe236/mc-bot-net/actions/workflows/ci.yml)
 
 ## Credits
 **kybe236** - the **maker**
