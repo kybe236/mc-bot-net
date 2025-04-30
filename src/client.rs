@@ -28,6 +28,13 @@ use crate::{
     utils::{cracked, data_types::varint::read_var_int_from_stream},
 };
 
+/*
+ * This will connect to the addr and port via TcpStream
+ * wich will get routed through proxy and random passwords if random_tor_node is set
+ * !TODO better naming
+ * also has a reuse_limit incase theres a check where you need to reconnect
+ * !TODO add redirect delay
+*/
 async fn connect_with_tor(
     config: &Config,
     retries: &mut usize,
@@ -69,6 +76,10 @@ async fn connect_with_tor(
     }
 }
 
+/*
+ * Connects to the configs addr and port via a tokio TcpStream
+ * Returns None when failed
+*/
 async fn connect_direct(config: &Config) -> Option<TcpStream> {
     let addr = config.addr.clone() + ":" + &config.port.to_string();
     match TcpStream::connect(addr).await {
@@ -80,6 +91,10 @@ async fn connect_direct(config: &Config) -> Option<TcpStream> {
     }
 }
 
+/*
+ * This is going to start the main game loop after joining the server
+ * !TODO exit when disconnected
+ */
 pub async fn run_client(id: usize, config: Arc<Config>) {
     let mut retries = 0;
     let mut last_username = String::new();
@@ -122,30 +137,26 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
 #[derive(Debug, Clone, PartialEq)]
 pub enum State {
     Login,
-    #[allow(unused)]
     Configuration,
     #[allow(unused)]
     Status,
     #[allow(unused)]
     Play,
-    #[allow(unused)]
     Handshake,
 }
 
 #[derive(Debug)]
 pub struct ConnectionState {
-    #[allow(unused)]
     pub encryption_enabled: bool,
-    #[allow(unused)]
     pub compression_threshold: i32,
-    #[allow(unused)]
     pub decrypt_cipher: Option<Aes128CfbDec>,
-    #[allow(unused)]
     pub encrypt_cipher: Option<Aes128CfbEnc>,
-    #[allow(unused)]
     pub state: State,
 }
 
+/*
+ * This is going to send a packet to the server using state to manage encryption and compression
+ */
 pub async fn send_packet(
     packet: ServerboundPacket,
     stream: &mut TcpStream,
@@ -166,6 +177,9 @@ pub async fn send_packet(
 
 pub type SharedState = Arc<RwLock<ConnectionState>>;
 
+/*
+ * This is the actuall game loop
+ */
 async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut state: SharedState) {
     info!("[{}] Starting game loop", id);
 
@@ -230,6 +244,9 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
     }
 }
 
+/*
+ * This implements the behaivour when getting certain packets
+ */
 async fn handle_packet(
     packet1: ClientboundPacket,
     stream: &mut TcpStream,
@@ -307,6 +324,7 @@ async fn handle_packet(
             });
             send_packet(keep_alive_packet, stream, &mut state).await;
         }
+        // !TODO store packs
         ClientboundPacket::KnownPacks(packet) => {
             debug!("[Clientbound] Known Packs: {:?}", packet);
             let serverbound_packet = ServerboundKnownPacksPacket::from_clientbound(packet);
