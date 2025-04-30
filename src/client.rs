@@ -23,6 +23,7 @@ use crate::{
             serverbound_known_packs_packet::ServerboundKnownPacksPacket,
             serverbound_login_acknowledged_packet::ServerboundLoginAcknowledgedPacket,
             serverbound_login_packet::ServerboundLoginPacket,
+            serverbound_pong_packet::ServerboundPongPacket,
         },
     },
     utils::{cracked, data_types::varint::read_var_int_from_stream},
@@ -334,6 +335,13 @@ async fn handle_packet(
                 &mut state,
             )
             .await;
+        }
+        ClientboundPacket::Ping(packet) => {
+            debug!("[Clientbound] Ping: {:?}", packet);
+            let pong_packet = ServerboundPacket::Pong(ServerboundPongPacket {
+                payload: packet.payload,
+            });
+            send_packet(pong_packet, stream, &mut state).await;
         }
         _ => {}
     }

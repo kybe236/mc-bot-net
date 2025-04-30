@@ -15,6 +15,7 @@ use clientbound::{
     clientbound_keep_alive_packet::ClientboundKeepAlivePacket,
     clientbound_known_packs_packet::ClientboundKnownPacksPacket,
     clientbound_login_sucess_packet::ClientboundLoginSucessPacket,
+    clientbound_ping_packet::ClientboundPingPacket,
     clientbound_set_compression_packet::ClientboundSetCompressionPacket,
 };
 use flate2::{Compression, bufread::ZlibDecoder, write::ZlibEncoder};
@@ -27,6 +28,7 @@ use serverbound::{
     serverbound_known_packs_packet::ServerboundKnownPacksPacket,
     serverbound_login_acknowledged_packet::ServerboundLoginAcknowledgedPacket,
     serverbound_login_packet::ServerboundLoginPacket,
+    serverbound_pong_packet::ServerboundPongPacket,
 };
 use tokio::{io::AsyncReadExt, net::TcpStream, sync::RwLock};
 use tracing::{debug, warn};
@@ -59,6 +61,7 @@ pub enum ClientboundPacket {
     FinishConfiguration(ClientboundFinishConfigurationPacket),
     KeepAlive(ClientboundKeepAlivePacket),
     KnownPacks(ClientboundKnownPacksPacket),
+    Ping(ClientboundPingPacket),
 }
 
 #[derive(Debug)]
@@ -71,6 +74,7 @@ pub enum ServerboundPacket {
     AcknowledgeFinishConfiguration(ServerboundAcknowledgeFinishConfigurationPacket),
     KeepAlive(ServerboundKeepAlivePacket),
     KnownPacks(ServerboundKnownPacksPacket),
+    Pong(ServerboundPongPacket),
 }
 
 impl ServerboundPacket {
@@ -84,6 +88,7 @@ impl ServerboundPacket {
             ServerboundPacket::AcknowledgeFinishConfiguration(packet) => packet.serialize(state),
             ServerboundPacket::KeepAlive(packet) => packet.serialize(state),
             ServerboundPacket::KnownPacks(packet) => packet.serialize(state),
+            ServerboundPacket::Pong(packet) => packet.serialize(state),
         }
     }
 }
@@ -377,10 +382,25 @@ pub async fn handle_packet_by_code(
         State::Status => {
             warn!("unsupported packet: {id} in status state");
         }
-        State::Play => {
-            let rest = id;
-            warn!("unsupported packet: {rest} in play state");
-        }
+        State::Play => match id {
+            0x26 => {
+                debug!("received keep alive packet");
+                let res = ClientboundKeepAlivePacket::deserialize(data).unwrap();
+                debug!("{res:?}");
+
+                return Ok(ClientboundPacket::KeepAlive(res));
+            }
+            0x36 => {
+                debug!("received ping packet");
+                let res = ClientboundPingPacket::deserialize(data).unwrap();
+                debug!("{res:?}");
+
+                return Ok(ClientboundPacket::Ping(res));
+            }
+            _ => {
+                warn!("unsupported packet: {id} in play state");
+            }
+        },
     }
     Err(())
 }

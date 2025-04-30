@@ -5,3 +5,4 @@ pub mod serverbound_keep_alive_packet;
 pub mod serverbound_known_packs_packet;
 pub mod serverbound_login_acknowledged_packet;
 pub mod serverbound_login_packet;
+pub mod serverbound_pong_packet;
