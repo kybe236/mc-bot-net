@@ -12,7 +12,7 @@ impl PacketSerialize for ServerboundKeepAlivePacket {
         }
         let mut buffer = Vec::new();
 
-        let id = if *state == State::Play { 0x18 } else { 0x04 };
+        let id = if *state == State::Play { 0x1A } else { 0x04 };
 
         write_var_int(&mut buffer, &id);
         buffer.append(&mut self.keep_alive_id.to_be_bytes().to_vec());
