@@ -1,6 +1,6 @@
 use super::varint::{read_var_int, write_var_int};
 
-#[allow(unused)]
+
 pub fn read_string(data: &[u8], mut index: &mut usize) -> Result<String, std::io::Error> {
     // Step 1: Read the length of the string (VarInt), which is the number of UTF-16 code units
     let length = read_var_int(data, Some(&mut index)) as usize;

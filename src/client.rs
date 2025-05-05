@@ -42,11 +42,14 @@ async fn connect_with_tor(
     last_username: &mut String,
     last_password: &mut String,
 ) -> Option<TcpStream> {
+    // Defaults to localhost:9050 if not specified
     let proxy = config.tor_proxy.as_deref().unwrap_or("127.0.0.1:9050");
+    // By default dont randomize proxy credentials
     let randomize = config.random_tor_node.unwrap_or(false);
+    // By default reuse the proxy for 0 retries
     let reuse_limit = config.reuse_proxy_for_retries.unwrap_or(0);
 
-    // Decide whether to reuse or generate new credentials
+    // If randomize is true and the retries are equal or greater to the reuse_limit change username and password
     if randomize && (*retries == 0 || *retries >= reuse_limit) {
         *last_username = rand::thread_rng()
             .sample_iter(&Alphanumeric)
@@ -106,6 +109,7 @@ pub async fn run_client(id: usize, config: Arc<Config>) {
         decrypt_cipher: None,
         encrypt_cipher: None,
         state: State::Handshake,
+        disconnected: false,
     }));
 
     loop {
@@ -141,7 +145,6 @@ pub enum State {
     Configuration,
     #[allow(unused)]
     Status,
-    #[allow(unused)]
     Play,
     Handshake,
 }
@@ -153,6 +156,7 @@ pub struct ConnectionState {
     pub decrypt_cipher: Option<Aes128CfbDec>,
     pub encrypt_cipher: Option<Aes128CfbEnc>,
     pub state: State,
+    pub disconnected: bool,
 }
 
 /*
@@ -201,8 +205,8 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
     state.write().await.state = State::Login;
 
     let login = ServerboundLoginPacket {
-        username: format!("Player_{}", id),
-        uuid: cracked::name_to_uuid(&format!("Player_{}", id)),
+        username: format!("kybe236-{}", id),
+        uuid: cracked::name_to_uuid(&format!("kybe236-{}", id)),
     };
 
     send_packet(ServerboundPacket::Login(login), &mut stream, &mut state).await;
@@ -256,11 +260,16 @@ async fn handle_packet(
     match packet1 {
         ClientboundPacket::EncryptionRequest(packet) => {
             debug!("[Clientbound] Encryption Request: {:?}", packet);
-            // Generate a random shared secret
+
+            if packet.should_authenticate {
+                state.write().await.disconnected = true;
+                error!("Server requested authentication, but this client does not support it.");
+                return;
+            }
+
             let mut shared_secret = vec![0u8; 16];
             rand::thread_rng().fill_bytes(&mut shared_secret);
 
-            // Parse the DER-encoded public key
             let public_key = RsaPublicKey::from_public_key_der(&packet.public_key)
                 .map_err(|e| {
                     std::io::Error::new(
@@ -273,14 +282,12 @@ async fn handle_packet(
             let encrypted_shared_secret = encrypt(&public_key, &shared_secret).unwrap();
             let encrypted_verify_token = encrypt(&public_key, &packet.verify_token).unwrap();
 
-            // Create the Encryption Response packet
             let response =
                 ServerboundPacket::EncryptionResponse(ServerboundEncryptionResponsePacket {
                     shared_secret: encrypted_shared_secret,
                     verify_token: encrypted_verify_token,
                 });
 
-            // Send the packet to the server
             send_packet(response, stream, &mut state).await;
             debug!("Sent encryption response");
 
@@ -343,6 +350,10 @@ async fn handle_packet(
             });
             send_packet(pong_packet, stream, &mut state).await;
         }
-        _ => {}
+        ClientboundPacket::Disconnect(packet) => {
+            debug!("[Clientbound] Disconnect: {:?}", packet);
+            state.write().await.disconnected = true;
+            error!("Disconnected from server: {}", packet.reason);
+        }
     }
 }

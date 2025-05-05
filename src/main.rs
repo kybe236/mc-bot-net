@@ -8,11 +8,12 @@ mod utils;
 
 #[tokio::main]
 async fn main() {
-    let config = Arc::new(config::load_config("config.json").await);
+    let config = Arc::new(config::load_config("config.json").await); // Load the configuration file
 
+    // Initialize the logger
     let _ = tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::INFO)
+            .with_max_level(tracing::Level::DEBUG)
             .with_target(false)
             .with_thread_ids(true)
             .with_ansi(true)

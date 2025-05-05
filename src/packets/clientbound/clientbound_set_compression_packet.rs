@@ -1,7 +1,11 @@
 use crate::{packets::PacketDeserialize, utils::data_types::varint::read_var_int};
 
+/*
+ * https://minecraft.wiki/w/Java_Edition_protocol/Packets#Set_Compression
+ */
 #[derive(Debug)]
 pub struct ClientboundSetCompressionPacket {
+    // The threshold for compression. If the packet size is greater than this value, it will be compressed.
     pub threshold: i32,
 }
 

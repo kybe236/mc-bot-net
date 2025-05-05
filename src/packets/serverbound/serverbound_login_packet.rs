@@ -4,9 +4,14 @@ use crate::{
     utils::data_types::{string::write_string, uuid::write_uuid, varint::write_var_int},
 };
 
+/*
+ * https://minecraft.wiki/w/Java_Edition_protocol/Packets#Login_Start
+ */
 #[derive(Debug)]
 pub struct ServerboundLoginPacket {
+    // The username of the client
     pub username: String,
+    // The UUID of the client for cracked genreated via name
     pub uuid: u128,
 }
 

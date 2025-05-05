@@ -1,8 +1,13 @@
 use crate::{client::State, packets::PacketSerialize, utils::data_types::varint::write_var_int};
 
+/*
+ * https://minecraft.wiki/w/Java_Edition_protocol/Packets#Encryption_Response
+ */
 #[derive(Debug)]
 pub struct ServerboundEncryptionResponsePacket {
+    // Shared Secret value, encrypted with the server's public key.
     pub shared_secret: Vec<u8>,
+    // Verify Token value, encrypted with the same public key as the shared secret.
     pub verify_token: Vec<u8>,
 }
 

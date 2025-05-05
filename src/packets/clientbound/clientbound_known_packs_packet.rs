@@ -5,19 +5,19 @@ use crate::{
 
 #[derive(Debug)]
 pub struct ClientboundKnownPacksPacket {
-    #[allow(unused)]
+    
     pub pack_count: i32,
-    #[allow(unused)]
+    
     pub packs: Vec<Pack>,
 }
 
 #[derive(Debug)]
 pub struct Pack {
-    #[allow(unused)]
+    
     pub namespace: String,
-    #[allow(unused)]
+    
     pub id: String,
-    #[allow(unused)]
+    
     pub version: String,
 }
 

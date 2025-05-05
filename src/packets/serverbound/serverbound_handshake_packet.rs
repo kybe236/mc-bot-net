@@ -4,11 +4,18 @@ use crate::{
     utils::data_types::{string::write_string, u16::write_u16, varint::write_var_int},
 };
 
+/*
+ * https://minecraft.wiki/w/Java_Edition_protocol/Packets#Handshake
+ */
 #[derive(Debug)]
 pub struct ServerboundHandshakePacket {
+    // The protocol version of the client https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Protocol_version_numbers
     pub protocol_version: i32,
+    // The server address used by some anti ddos systems
     pub server_address: String,
+    // The server port used by some anti ddos systems
     pub server_port: u16,
+    // The next state of the client 1 for Status, 2 for Login, 3 for Transfer.
     pub next_state: i32,
 }
 
@@ -20,10 +27,8 @@ impl PacketSerialize for ServerboundHandshakePacket {
 
         let mut buffer = Vec::new();
 
-        // Write the packet ID (0x00 for Handshake)
         write_var_int(&mut buffer, &0x00);
 
-        // Write the protocol version, server address, and port aswell as the next state
         write_var_int(&mut buffer, &self.protocol_version);
         write_string(&mut buffer, &self.server_address);
         write_u16(&mut buffer, self.server_port);

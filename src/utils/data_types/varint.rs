@@ -43,7 +43,6 @@ pub fn read_var_int_long(var_int: &[u8], offset: Option<&mut usize>) -> i64 {
 /// Reads a VarInt (i32) from a byte slice, returning the parsed value.
 /// The `offset` is optional, and if provided, it will be updated to reflect
 /// the position after reading the VarInt.
-#[allow(unused)]
 pub fn read_var_int(var_int: &[u8], offset: Option<&mut usize>) -> i32 {
     let mut value: i32 = 0;
     let mut position = 0;
@@ -91,7 +90,6 @@ pub fn write_var_long(result: &mut Vec<u8>, value: i64) {
 
 /// Writes a VarInt (i32) to the provided byte vector. The value will be encoded
 /// using a variable-length encoding format.
-#[allow(unused)]
 pub fn write_var_int(result: &mut Vec<u8>, value: &i32) {
     let mut value = *value as u32; // Work with unsigned representation for easy bit manipulation
 
@@ -107,7 +105,6 @@ pub fn write_var_int(result: &mut Vec<u8>, value: &i32) {
 }
 
 /// Reads a VarInt (i32) from a TCP stream asynchronously.
-#[allow(unused)]
 pub async fn read_var_int_from_stream(stream: &mut TcpStream) -> io::Result<i32> {
     let mut num_read = 0;
     let mut value = 0u32;

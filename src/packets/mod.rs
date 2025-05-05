@@ -41,36 +41,45 @@ use crate::{
 pub mod clientbound;
 pub mod serverbound;
 
-#[allow(unused)]
 pub trait PacketSerialize {
     fn serialize(&self, state: &State) -> Vec<u8>;
 }
 
-#[allow(unused)]
 pub trait PacketDeserialize: Sized {
     fn deserialize(data: Vec<u8>) -> Result<Self, ()>;
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 pub enum ClientboundPacket {
+    // HANDSHAKE
+    // LOGIN
     EncryptionRequest(ClientboundEncryptionRequestPacket),
-    Disconnect(ClientboundDisconnectPacket),
     SetCompression(ClientboundSetCompressionPacket),
     LoginSucess(ClientboundLoginSucessPacket),
-    FinishConfiguration(ClientboundFinishConfigurationPacket),
-    KeepAlive(ClientboundKeepAlivePacket),
+
+    // CONFIG
     KnownPacks(ClientboundKnownPacksPacket),
+    FinishConfiguration(ClientboundFinishConfigurationPacket),
+
+    // PLAY
+    KeepAlive(ClientboundKeepAlivePacket),
     Ping(ClientboundPingPacket),
+
+    // MORE
+    Disconnect(ClientboundDisconnectPacket),
 }
 
 #[derive(Debug)]
-#[allow(unused)]
 pub enum ServerboundPacket {
+    // HANDSHAKE
     Handshake(ServerboundHandshakePacket),
+
+    // LOGIN
     Login(ServerboundLoginPacket),
-    LoginAcknowledged(ServerboundLoginAcknowledgedPacket),
     EncryptionResponse(ServerboundEncryptionResponsePacket),
+    LoginAcknowledged(ServerboundLoginAcknowledgedPacket),
+
+    // CONFIG
     AcknowledgeFinishConfiguration(ServerboundAcknowledgeFinishConfigurationPacket),
     KeepAlive(ServerboundKeepAlivePacket),
     KnownPacks(ServerboundKnownPacksPacket),
@@ -78,7 +87,6 @@ pub enum ServerboundPacket {
 }
 
 impl ServerboundPacket {
-    #[allow(unused)]
     pub fn serialize(&self, state: &State) -> Vec<u8> {
         match self {
             ServerboundPacket::Handshake(packet) => packet.serialize(state),
@@ -93,19 +101,8 @@ impl ServerboundPacket {
     }
 }
 
-#[derive(Debug)]
-#[allow(unused)]
-pub enum PacketType {
-    Handshake,
-    Login,
-    Play,
-    Status,
-}
-
-#[allow(unused)]
 pub fn compress(data: Vec<u8>, compress_threshold: i32) -> Result<Vec<u8>, std::io::Error> {
     const MAX_PACKET_LENGTH: i32 = 2097151; // 2^21 - 1 (maximum for a 3-byte VarInt)
-    const MAX_UNCOMPRESSED_LENGTH: i32 = 8388608; // 2^23 (serverbound packet limit)
 
     let uncompressed_length = data.len() as i32;
 
@@ -208,12 +205,10 @@ pub fn decompress(data: Vec<u8>, compress_threshold: i32) -> Result<Vec<u8>, std
     }
 }
 
-#[allow(unused)]
 pub type Aes128CfbEnc = cfb8::Encryptor<Aes128>;
-#[allow(unused)]
+
 pub type Aes128CfbDec = cfb8::Decryptor<Aes128>;
 
-#[allow(unused)]
 pub fn encrypt(public_key: &RsaPublicKey, data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
     let mut rng = rand::thread_rng();
     public_key
@@ -221,7 +216,6 @@ pub fn encrypt(public_key: &RsaPublicKey, data: &[u8]) -> Result<Vec<u8>, std::i
         .map_err(|e| std::io::Error::new(io::ErrorKind::Other, e.to_string()))
 }
 
-#[allow(unused)]
 pub fn create_cipher(key: &[u8]) -> (Aes128CfbEnc, Aes128CfbDec) {
     (
         Aes128CfbEnc::new_from_slices(key, key).unwrap(),
@@ -229,21 +223,18 @@ pub fn create_cipher(key: &[u8]) -> (Aes128CfbEnc, Aes128CfbDec) {
     )
 }
 
-#[allow(unused)]
 pub fn encrypt_packet(cipher: &mut Aes128CfbEnc, packet: &mut [u8]) {
     let (chunks, rest) = InOutBuf::from(packet).into_chunks();
     assert!(rest.is_empty());
     cipher.encrypt_blocks_inout_mut(chunks);
 }
 
-#[allow(unused)]
 pub fn decrypt_packet(cipher: &mut Aes128CfbDec, packet: &mut [u8]) {
     let (chunks, rest) = InOutBuf::from(packet).into_chunks();
     assert!(rest.is_empty());
     cipher.decrypt_blocks_inout_mut(chunks);
 }
 
-#[allow(unused)]
 pub async fn read_encrypted_var_int_from_stream(
     stream: &mut TcpStream,
     cipher: &mut Aes128CfbDec,
@@ -254,7 +245,7 @@ pub async fn read_encrypted_var_int_from_stream(
     loop {
         // Read a single encrypted byte from the stream
         let mut encrypted_byte = [0u8; 1];
-        stream.read_exact(&mut encrypted_byte).await;
+        let _ = stream.read_exact(&mut encrypted_byte).await;
 
         let mut block = GenericArray::clone_from_slice(&encrypted_byte);
 
@@ -275,7 +266,6 @@ pub async fn read_encrypted_var_int_from_stream(
     Ok(value as i32)
 }
 
-#[allow(unused)]
 pub async fn convert(
     mut data: Vec<u8>,
     state: &Arc<RwLock<ConnectionState>>,
@@ -292,7 +282,6 @@ pub async fn convert(
     data_to_packet(res, state).await
 }
 
-#[allow(unused)]
 pub async fn data_to_packet(
     data: Vec<u8>,
     state: &Arc<RwLock<ConnectionState>>,
@@ -318,9 +307,9 @@ pub async fn handle_packet_by_code(
         State::Login => match id {
             0x00 => {
                 debug!("Disconnect Packet Received");
-                let res = ClientboundDisconnectPacket::deserialize(data);
+                let res = ClientboundDisconnectPacket::deserialize(data).unwrap();
                 debug!("{res:#?}");
-                return Ok(ClientboundPacket::Disconnect(res?));
+                return Ok(ClientboundPacket::Disconnect(res));
             }
             0x01 => {
                 debug!("received encryption request");

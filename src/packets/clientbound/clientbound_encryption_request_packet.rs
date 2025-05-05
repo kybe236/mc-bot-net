@@ -3,13 +3,19 @@ use crate::{
     utils::data_types::{boolean::read_boolean, string::read_string, varint::read_var_int},
 };
 
+/*
+ * https://minecraft.wiki/w/Java_Edition_protocol/Packets#Encryption_Request
+ */
 #[derive(Debug)]
 pub struct ClientboundEncryptionRequestPacket {
+    // UNUSED
     #[allow(unused)]
     pub server_id: String,
+    // The public key of the server
     pub public_key: Vec<u8>,
+    // Random token
     pub verify_token: Vec<u8>,
-    #[allow(unused)]
+    // Weather the client should authenticate with the server
     pub should_authenticate: bool,
 }
 

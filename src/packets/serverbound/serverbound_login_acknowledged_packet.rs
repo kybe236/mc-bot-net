@@ -1,5 +1,8 @@
 use crate::{client::State, packets::PacketSerialize, utils::data_types::varint::write_var_int};
 
+/*
+ * https://minecraft.wiki/w/Java_Edition_protocol/Packets#Login_Acknowledged
+ */
 #[derive(Debug)]
 pub struct ServerboundLoginAcknowledgedPacket {}
 

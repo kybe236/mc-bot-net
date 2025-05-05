@@ -48,15 +48,14 @@ impl Display for NbtValue {
     }
 }
 
+#[allow(unused)]
 impl NbtValue {
-    #[allow(unused)]
     pub fn parse(data: &[u8], index: &mut usize) -> Result<NbtValue, String> {
         let tag_id = NbtValue::read_byte(data, index).unwrap() as u8;
 
         NbtValue::parse_value(tag_id, data, index)
     }
 
-    #[allow(unused)]
     fn read_byte(data: &[u8], index: &mut usize) -> Result<i8, String> {
         if *index >= data.len() {
             return Err("Out of bounds".to_string());
@@ -67,7 +66,6 @@ impl NbtValue {
         Ok(value)
     }
 
-    #[allow(unused)]
     fn read_short(data: &[u8], index: &mut usize) -> Result<i16, String> {
         if *index + 2 > data.len() {
             return Err("Out of bounds".to_string());
@@ -78,7 +76,6 @@ impl NbtValue {
         Ok(value)
     }
 
-    #[allow(unused)]
     fn read_int(data: &[u8], index: &mut usize) -> Result<i32, String> {
         if *index + 4 > data.len() {
             return Err("Out of bounds".to_string());
@@ -89,7 +86,6 @@ impl NbtValue {
         Ok(value)
     }
 
-    #[allow(unused)]
     fn read_long(data: &[u8], index: &mut usize) -> Result<i64, String> {
         if *index + 8 > data.len() {
             return Err("Out of bounds".to_string());
@@ -100,7 +96,6 @@ impl NbtValue {
         Ok(value)
     }
 
-    #[allow(unused)]
     fn read_float(data: &[u8], index: &mut usize) -> Result<f32, String> {
         if *index + 4 > data.len() {
             return Err("Out of bounds".to_string());
@@ -111,7 +106,6 @@ impl NbtValue {
         Ok(value)
     }
 
-    #[allow(unused)]
     fn read_double(data: &[u8], index: &mut usize) -> Result<f64, String> {
         if *index + 8 > data.len() {
             return Err("Out of bounds".to_string());
@@ -122,7 +116,6 @@ impl NbtValue {
         Ok(value)
     }
 
-    #[allow(unused)]
     fn read_byte_array(data: &[u8], index: &mut usize) -> Result<Vec<u8>, String> {
         let length = NbtValue::read_int(data, index)? as usize;
         let value = data[*index..*index + length].to_vec();
@@ -130,7 +123,6 @@ impl NbtValue {
         Ok(value)
     }
 
-    #[allow(unused)]
     fn read_tag_list(data: &[u8], index: &mut usize) -> Result<Vec<NbtValue>, String> {
         let tag_id = NbtValue::read_byte(data, index)? as u8;
         let length = NbtValue::read_int(data, index)? as usize;
@@ -141,7 +133,6 @@ impl NbtValue {
         Ok(list)
     }
 
-    #[allow(unused)]
     fn read_int_array(data: &[u8], index: &mut usize) -> Result<Vec<i32>, String> {
         let length = NbtValue::read_int(data, index)? as usize;
         let mut array = Vec::with_capacity(length);
@@ -151,7 +142,6 @@ impl NbtValue {
         Ok(array)
     }
 
-    #[allow(unused)]
     fn read_long_array(data: &[u8], index: &mut usize) -> Result<Vec<i64>, String> {
         let length = NbtValue::read_int(data, index)? as usize;
         let mut array = Vec::with_capacity(length);
@@ -161,7 +151,6 @@ impl NbtValue {
         Ok(array)
     }
 
-    #[allow(unused)]
     fn read_string(data: &[u8], index: &mut usize) -> Result<String, String> {
         let length = NbtValue::read_short(data, index)? as usize;
         let value = String::from_utf8(data[*index..*index + length].to_vec())
@@ -170,7 +159,6 @@ impl NbtValue {
         Ok(value)
     }
 
-    #[allow(unused)]
     fn parse_value(tag_id: u8, data: &[u8], index: &mut usize) -> Result<NbtValue, String> {
         match tag_id {
             0 => Ok(NbtValue::End),

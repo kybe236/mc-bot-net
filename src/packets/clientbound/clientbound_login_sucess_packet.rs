@@ -5,24 +5,29 @@ use crate::{
     },
 };
 
+#[allow(unused)]
 #[derive(Debug)]
 pub struct Property {
-    #[allow(unused)]
     pub name: String,
-    #[allow(unused)]
     pub value: String,
-    #[allow(unused)]
     pub signed: bool,
-    #[allow(unused)]
     pub signature: Option<String>,
 }
 
-#[allow(unused)]
+/*
+ * https://minecraft.wiki/w/Java_Edition_protocol/Packets#Login_Success
+ */
+
 #[derive(Debug)]
+#[allow(unused)]
 pub struct ClientboundLoginSucessPacket {
+    // The UUID of the player
     pub uuid: u128,
+    // The username of the player
     pub username: String,
+    // The number of properties
     pub number_of_properties: i32,
+    // The properties of the player
     pub propertys: Vec<Property>,
 }
 

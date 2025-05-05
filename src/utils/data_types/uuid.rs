@@ -1,4 +1,4 @@
-#[allow(unused)]
+
 pub fn read_uuid(buffer: &[u8], offset: Option<&mut usize>) -> u128 {
     let mut index = 0;
     let offset = offset.unwrap_or(&mut index);
