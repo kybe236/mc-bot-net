@@ -159,6 +159,17 @@ pub struct ConnectionState {
     pub disconnected: bool,
 }
 
+impl ConnectionState {
+    pub fn reset(&mut self) {
+        self.encryption_enabled = false;
+        self.compression_threshold = -1;
+        self.decrypt_cipher = None;
+        self.encrypt_cipher = None;
+        self.state = State::Handshake;
+        self.disconnected = false;
+    }
+}
+
 /*
  * This is going to send a packet to the server using state to manage encryption and compression
  */
@@ -177,7 +188,13 @@ pub async fn send_packet(
         );
     }
 
-    stream.write_all(&data).await.unwrap();
+    let res = stream.write_all(&data).await;
+    if res.is_err() {
+        error!("Failed to send packet: {:?}", res);
+        state.write().await.disconnected = true;
+    } else {
+        debug!("Sent packet: {:?}", data);
+    }
 }
 
 pub type SharedState = Arc<RwLock<ConnectionState>>;
@@ -212,6 +229,11 @@ async fn game_loop(id: usize, mut stream: TcpStream, config: Arc<Config>, mut st
     send_packet(ServerboundPacket::Login(login), &mut stream, &mut state).await;
 
     loop {
+        if state.read().await.disconnected {
+            debug!("[{}] Disconnected from server", id);
+            state.write().await.reset();
+            break;
+        }
         let mut buf = [0u8; 1];
         let count = stream.peek(&mut buf).await.unwrap();
         if count == 0 {

@@ -3,7 +3,7 @@
     "tor_proxy": "127.0.0.1:9050",
     "random_tor_node": true,
     "reuse_proxy_for_retries": 2,
-    "addr": "",
+    "addr": "jonarchy.com",
     "port": 25565,
-    "client_count": 500
+    "client_count": 5
 }
